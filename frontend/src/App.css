@@ -1,0 +1,5 @@
+body { margin: 0; background: #171a21; color: white; }
+button { margin: 5px; padding: 8px; background: #4dabf7; border: none; color: white; cursor: pointer; }
+button:hover { background: #357abd; }
+table { margin-top: 20px; }
+th, td { padding: 10px; text-align: left; border: 1px solid #333; }
