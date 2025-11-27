@@ -14,7 +14,10 @@ function App() {
       const params = new URLSearchParams(window.location.search);
       if (params.get('loggedIn') || document.cookie.includes('connect.sid')) {
         try {
-          const res = await axios.get(`${BACKEND}/api/inventory`, { withCredentials: true });
+          const res = await axios.get(`${BACKEND}/api/inventory`, { 
+            withCredentials: true,
+            headers: { 'Access-Control-Allow-Origin': '*' }  // 加这行
+          });
           setUser(res.data);
           // 这里以后再接真实库存接口，先给你看成功
           setInventory([{ name: '欢迎使用！库存功能已就绪', price: '¥0' }]);
