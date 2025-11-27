@@ -19,7 +19,7 @@ function App() {
   const fetchInventory = async () => {
     setLoading(true);
     try {
-      const res = await axios.get('http://localhost:3001/api/inventory', { withCredentials: true });
+      const res = await axios.get('https://cs2-skin-dashboard.onrender.com/api/inventory', { withCredentials: true });
       setInventory(res.data.inventory);
       setPrices(res.data.prices);
       setTotal(res.data.totalValue);
@@ -31,11 +31,11 @@ function App() {
   };
 
   const login = () => {
-    window.location.href = 'http://localhost:3001/auth/steam';
+    window.location.href = 'https://cs2-skin-dashboard.onrender.com/auth/steam';
   };
 
   const logout = () => {
-    window.location.href = 'http://localhost:3001/api/logout';
+    window.location.href = 'https://cs2-skin-dashboard.onrender.com/api/logout';
   };
 
   const copyPrice = async (price) => {
@@ -48,11 +48,11 @@ function App() {
   };
 
   const checkAlert = async (hash, currentPrice) => {
-    const res = await axios.get(`http://localhost:3001/api/market/${encodeURIComponent(hash)}`);
+    const res = await axios.get(`https://cs2-skin-dashboard.onrender.com/api/market/${encodeURIComponent(hash)}`);
     const { spread, buyMax, sellMin } = res.data;
     if (spread / buyMax * 100 > alertThreshold) {
       // 模拟警报（实际连 Telegram）
-      axios.post('http://localhost:3001/api/alert', {
+      axios.post('https://cs2-skin-dashboard.onrender.com/api/alert', {
         message: `${hash} 低价警报！买 ${buyMax}¥ / 卖 ${sellMin}¥ (差 ${spread.toFixed(2)}¥)`,
         chatId: '你的chatId' // 用户需填
       });
