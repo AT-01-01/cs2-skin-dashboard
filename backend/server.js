@@ -19,9 +19,10 @@ app.use(session({
   secret: 'cs2dashboard2025',
   resave: false,
   saveUninitialized: false,
-  proxy: true,                                      // 关键！
-  cookie: { secure: true, sameSite: 'none', httpOnly: true }  // 关键！
+  proxy: true,
+  cookie: { secure: true, sameSite: 'none', httpOnly: true }
 }));
+app.set('trust proxy', 1);   // ←←← 加上这行！超级关键！
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -54,7 +55,7 @@ app.get('/auth/steam/return',
   }
 );
 
-app.get('/api/inventory', (req, res) => {
+app.get('/api/me', (req, res) => {
   if (!req.user) return res.status(401).json({error: '未登录'});
   res.json({ steamid: req.user.steamid, message: '登录成功！库存加载中…' });
 });
