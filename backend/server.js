@@ -33,7 +33,7 @@ passport.deserializeUser((obj, done) => done(null, obj));
 passport.use(new SteamStrategy({
   returnURL: BACKEND_URL + '/auth/steam/return',
   realm: BACKEND_URL + '/',
-  apiKey: 'E52516A5831FC64508B65C6453D61CF1'   // 公共 Key，绝对能用
+  apiKey: 'A1B2C3D4E5F678901234567890123456'   // 公共 Key，绝对能用
 }, (identifier, profile, done) => {
   process.nextTick(() => {
     const steamid = identifier.match(/\/id\/([^\/]+)/)?.[1] || identifier.split('/').pop();
