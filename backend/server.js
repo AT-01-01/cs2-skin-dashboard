@@ -19,11 +19,11 @@ app.use(passport.session());
 
 // Steam 策略
 passport.use(new SteamStrategy({
-  returnURL: `${process.env.BACKEND_URL || 'http://localhost:3001'}/auth/steam/return`,
-  realm: process.env.BACKEND_URL || 'http://localhost:3001/',
+  returnURL: 'https://cs2-skin-dashboard.onrender.com/auth/steam/return',
+  realm: 'https://cs2-skin-dashboard.onrender.com/',
   apiKey: process.env.STEAM_API_KEY
 }, (identifier, profile, done) => {
-  return done(null, { steamid: identifier });
+  return done(null, { steamid: identifier.split('/').pop() });
 }));
 
 passport.serializeUser((user, done) => done(null, user));
