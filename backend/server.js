@@ -10,13 +10,18 @@ const app = express();
 const BACKEND_URL  = 'https://cs2-skin-dashboard.onrender.com';
 const FRONTEND_URL = 'https://cs2-skin-dashboard.vercel.app';   // ←←←←← 如果你用的是新部署的地址，改成那个！！！
 
-app.use(cors({ origin: FRONTEND_URL, credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
 app.use(session({
   secret: 'cs2dashboard2025supersecret',
   resave: false,
   saveUninitialized: false,
-  cookie: { secure: true, sameSite: 'none' }
+  cookie: { 
+    secure: true, 
+    sameSite: 'none',
+    domain: '.onrender.com',  // 加这一行
+    path: '/' 
+  }
 }));
 app.use(passport.initialize());
 app.use(passport.session());
