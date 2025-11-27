@@ -1,97 +1,113 @@
+// frontend/src/App.jsx
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const BACKEND = 'https://cs2-skin-dashboard.onrender.com';
+const BACKEND = import.meta.env.VITE_BACKEND_ORIGIN || 'http://localhost:8080';
 
 function App() {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('steamApiKey') || '');
+  const [apiKey, setApiKey] = useState(''); // do not auto-load from localStorage by default
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
 
-  // 检查登录 + 加载库存
   useEffect(() => {
+    // 请求本地后端的 /api/me 如果你后端实现了 steam oauth，会返回登录用户
     axios.get(`${BACKEND}/api/me`, { withCredentials: true })
       .then(res => {
-        setUser(res.data))
-      .catch(() => {});
+        setUser(res.data);
+        if (!apiKey && res.data?.steamid) {
+          setShowKeyInput(true);
+        }
+      })
+      .catch(() => setUser(null));
 
+    // 清理 URL 上的参数
     if (window.location.search.includes('loggedIn=true')) {
       window.history.replaceState({}, '', '/');
     }
   }, []);
 
-  // 用户保存 Key 后加载库存
-  const loadInventory = async () => {
-    if (!apiKey || !user?.steamid) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(
-        `https://api.steampowered.com/IEconItems_730/GetPlayerItems/v0001/`,
-        { params: { key: apiKey, steamid: user.steamid } }
-      );
-
-      const items = res.data.result?.items || [];
-      const validItems = items
-        .filter(item => item.market_hash_name)
-        .slice(0, 50); // 取前50件防止卡死
-
-      // 获取 Buff 价格（简单版：只取名字匹配最低价）
-      const itemsWithPrice = await Promise.all(
-        validItems.map(async (item) => {
-          let buffPrice = '获取中...';
-          try {
-            const searchRes = await fetch(
-              `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.market_hash_name)}`
-            );
-            const data = await searchRes.json();
-            buffPrice = data.data?.items?.[0]?.price ? `¥${data.data.items[0].price}` : '暂无挂单';
-          } catch {
-            buffPrice = '网络错误';
-          }
-          return {
-            name: item.market_hash_name,
-            icon: `https://community.akamai.steamstatic.com/economy/image/${item.icon_url}/360fx360f`,
-            wear: item.paintwear ? (parseFloat(item.paintwear) * 100).toFixed(4) + '%' : '未知',
-            buffPrice
-          };
-        })
-      );
-
-      setInventory(itemsWithPrice);
-    } catch (err) {
-      alert('API Key 无效或库存设为私密，请检查后重试');
+  const loadInventory = async (useStored = false) => {
+    setErrorMsg('');
+    if (!user?.steamid) {
+      setErrorMsg('请先登录 Steam（或手动输入 steamid）');
+      return;
     }
-    setLoading(false);
+    // if you intentionally want to use a stored key in localStorage:
+    const keyToUse = useStored ? localStorage.getItem('steamApiKey') : apiKey;
+
+    setLoading(true);
+    setInventory([]);
+    try {
+      const res = await axios.post(`${BACKEND}/api/inventory`, {
+        steamid: user.steamid,
+        key: keyToUse
+      }, { withCredentials: true });
+
+      const items = res.data.items || [];
+      const processed = items
+        .filter(i => !!i.name)
+        .slice(0, 50)
+        .map(item => {
+          // paintwear: keep industry-friendly formatting
+          let wear = '未知';
+          if (item.paintwear !== null && item.paintwear !== undefined && !Number.isNaN(item.paintwear)) {
+            // keep as decimal (0.xxxx) with up to 6 decimals
+            wear = Number(item.paintwear).toFixed(6).replace(/0+$/,'').replace(/\.$/,'');
+          } else if (item.floatvalue) {
+            wear = String(item.floatvalue);
+          }
+
+          const icon = item.icon_url || '/placeholder-360.png'; // ensure you have a placeholder in public/
+
+          return {
+            id: item.id,
+            name: item.name,
+            icon,
+            wear,
+            buffPrice: '加载中...'
+          };
+        });
+
+      setInventory(processed);
+    } catch (err) {
+      console.error(err);
+      const message = err.response?.data?.error || err.message || '请求失败';
+      setErrorMsg(String(message));
+    } finally {
+      setLoading(false);
+    }
   };
 
   const saveKeyAndLoad = () => {
-    if (!apiKey.trim()) return alert('请输入 Steam Web API Key');
-    localStorage.setItem('steamApiKey', apiKey);
+    if (!apiKey.trim()) return alert('请输入 Key');
+    // 用户主动选择保存才写 localStorage
+    localStorage.setItem('steamApiKey', apiKey.trim());
     setShowKeyInput(false);
-    loadInventory();
+    loadInventory(true);
   };
 
-  const login = () => window.location.href = `${BACKEND}/auth/steam`;
-  const logout = () => window.location.href = `${BACKEND}/api/logout`;
+  const login = () => {
+    window.location.href = `${BACKEND}/auth/steam`;
+  };
+  const logout = () => {
+    window.location.href = `${BACKEND}/api/logout`;
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#0e141b', color: 'white', fontFamily: 'Arial, sans-serif' }}>
-      {/* 顶部 SteamID 大标题 */}
       {user && (
-        <div style={{ padding: '30px 20px', textAlign: 'center', background: 'linear-gradient(90deg, #1a2a3a, #16232f)' }}>
-          <h1 style={{ fontSize: '42px', color: '#66c0f4', margin: 0 }}>
-            {user.steamid}
-          </h1>
-          <p style={{ color: '#8be9fd', margin: '10px 0 0' }}>CS2 专属皮肤仪表盘</p>
+        <div style={{ padding: '30px', textAlign: 'center', background: 'linear-gradient(90deg, #1a2a3a, #16232f)' }}>
+          <h1 style={{ fontSize: '44px', color: '#66c0f4', margin: 0 }}>{user.steamid}</h1>
+          <p style={{ color: '#8be9fd' }}>CS2 专属皮肤仪表盘</p>
         </div>
       )}
 
-      {/* 未登录 */}
       {!user ? (
-        <div style={{ textAlign: 'center', paddingTop: '200px' }}>
-          <h1 style={{ fontSize: '48px', color: '#66c0f4' }}>CS2 皮肤仪表盘h1>
+        <div style={{ textAlign: 'center', paddingTop: '150px' }}>
+          <h1 style={{ fontSize: '48px', color: '#66c0f4' }}>CS2 皮肤仪表盘</h1>
           <button onClick={login} style={{
             marginTop: '50px',
             padding: '20px 80px',
@@ -103,20 +119,18 @@ function App() {
             cursor: 'pointer'
           }}>
             Steam 登录
-          button>
-        div>
+          </button>
+        </div>
       ) : (
         <div style={{ padding: '20px' }}>
-          {/* 输入 API Key 弹窗 */}
-          {showKeyInput && !inventory.length && (
-            <div style={{ textAlign: 'center', margin: '40px auto', maxWidth: '600px', padding: '30px', background: '#16232f', borderRadius: '16px' }}>
-              <p style={{ fontSize: '20px' }}>首次使用需绑定你的 Steam Web API Key（免费申请）</p>
+          {showKeyInput && inventory.length === 0 && (
+            <div style={{ textAlign: 'center', margin: '50px auto', maxWidth: '600px', padding: '40px', background: '#16232f', borderRadius: '16px' }}>
+              <p style={{ fontSize: '20px' }}>首次使用需要你的 Steam Web API Key（可选：你也可以把 key 填到后端环境变量中）</p>
               <input
-                type="text"
                 value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="粘贴你的 32 位 API Key"
-                style={{ width: '100%', padding: '14px', fontSize: '18px', margin: '15px 0', borderRadius: '8px', border: 'none' }}
+                onChange={e => setApiKey(e.target.value)}
+                placeholder="粘贴 32 位 Key（可选）"
+                style={{ width: '100%', padding: '14px', fontSize: '18px', borderRadius: '8px', margin: '15px 0' }}
               />
               <br />
               <button onClick={saveKeyAndLoad} style={{
@@ -124,75 +138,75 @@ function App() {
                 background: '#66c0f4',
                 border: 'none',
                 borderRadius: '8px',
-                fontSize: '18px',
-                cursor: 'pointer'
+                fontSize: '18px'
               }}>
-                加载我的库存
-              button>
-              <p style={{ marginTop: '15px', fontSize: '14px', color: '#888' }}>
+                加载我的库存并保存 Key
+              </button>
+              <button onClick={() => loadInventory(false)} style={{
+                padding: '12px 28px',
+                marginLeft: '12px',
+                background: '#1b2838',
+                border: '1px solid #66c0f4',
+                color: '#66c0f4',
+                borderRadius: '8px',
+                fontSize: '16px'
+              }}>
+                临时加载（不保存 Key）
+              </button>
+              <p style={{ marginTop: '15px', fontSize: '14px' }}>
                 <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer" style={{ color: '#66c0f4' }}>
-                  点此免费申请 Key（30秒）
-                a>
-              p>
-            div>
+                  点此免费申请 Key
+                </a>
+              </p>
+            </div>
           )}
 
-          {/* 加载中 */}
-          {loading && <div style={{ textAlign: 'center', padding: '100px', fontSize: '24px' }}>正在加载你的库存，请稍等...</div>}
+          {errorMsg && <div style={{ color: '#ffcccb', textAlign: 'center', margin: '12px' }}>{errorMsg}</div>}
 
-          {/* 库存网格：一行5个 */}
+          {loading && <div style={{ textAlign: 'center', padding: '60px', fontSize: '24px' }}>正在拉取你的库存...</div>}
+
           {inventory.length > 0 && (
-            <div>
-              <h2 style={{ textAlign: 'center', color: '#ff79c6', margin: '40px 0' }}>
-                你的 CS2 库存（实时 Buff 参考价）
-              h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: '20px',
-                padding: '0 20px',
-                maxWidth: '1400px',
-                margin: '0 auto'
-              }}>
-                {inventory.map((item, i) => (
-                  <div key={i} style={{
-                    background: 'linear-gradient(135deg, #1e2a38, #16202a)',
-                    borderRadius: '16px',
-                    padding: '16px',
-                    textAlign: 'center',
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.6)',
-                    transition: 'transform 0.3s',
-                  }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-8px)'}
-                     onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
-                    <img src={item.icon} alt={item.name} style={{ width: '100%', borderRadius: '12px', marginBottom: '12px' }} />
-                    <h4 style={{ margin: '8px 0', fontSize: '15px', color: '#fff', height: '48px', overflow: 'ellipsis', overflow: 'hidden' }}>
-                      {item.name}
-                    h4>
-                    <p style={{ color: '#8be9fd', fontSize: '14px' }}>磨损: {item.wear}p>
-                    <p style={{ color: '#ff6b6b', fontSize: '18px', fontWeight: 'bold', marginTop: '10px' }}>
-                      {item.buffPrice}
-                    p>
-                  div>
-                ))}
-              div>
-            div>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+              gap: '24px',
+              padding: '20px 20px',
+              maxWidth: '1400px',
+              margin: '0 auto'
+            }}>
+              {inventory.map((item) => (
+                <div key={item.id} className="card" style={{
+                  background: '#1a2332',
+                  borderRadius: '16px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  boxShadow: '0 8px 25px rgba(0,0,0,0.5)',
+                  transition: 'transform 0.25s ease',
+                }}>
+                  <img src={item.icon} alt="" style={{ width: '100%', borderRadius: '12px' }} />
+                  <h4 style={{ margin: '12px 0 8px', fontSize: '15px', height: '50px', overflow: 'hidden' }}>
+                    {item.name}
+                  </h4>
+                  <p style={{ color: '#8be9fd', margin: '8px 0' }}>磨损: {item.wear}</p>
+                  <p style={{ color: '#ff6b6b', fontWeight: 'bold', fontSize: '18px' }}>
+                    {item.buffPrice}
+                  </p>
+                </div>
+              ))}
+            </div>
           )}
 
-          {/* 已加载但为空（Key填了但没库存） */}
-          {inventory.length === 0 && !loading && !showKeyInput && (
-            <div style={{ textAlign: 'center', padding: '100px', color: '#888' }}>
-              暂无 CS2 物品或库存隐私设置，请在 Steam 设置中公开库存
-            div>
-          )}
-
-          <div style={{ textAlign: 'center', marginTop: '80px' }}>
-            <button onClick={logout} style={{ padding: '12px 30px', background: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+          <div style={{ textAlign: 'center', margin: '40px 0 80px' }}>
+            <button onClick={logout} style={{ padding: '12px 32px', background: '#e74c3c', border: 'none', borderRadius: '8px' }}>
               退出登录
-            button>
-          div>
-        div>
+            </button>
+          </div>
+        </div>
       )}
-    div>
+      <style>{`
+        .card:hover { transform: translateY(-10px); }
+      `}</style>
+    </div>
   );
 }
 
