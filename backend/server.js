@@ -33,7 +33,7 @@ passport.deserializeUser((obj, done) => done(null, obj));
 app.get('/auth/steam', passport.authenticate('steam'));
 app.get('/auth/steam/return', 
   passport.authenticate('steam', { failureRedirect: '/' }), 
-  (req, res) => res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:5173'}?loggedIn=true`)
+  (req, res) => res.redirect(`https://cs2-skin-dashboard-zsbw.vercel.app?loggedIn=true`)
 );
 
 app.get('/api/logout', (req, res) => {
