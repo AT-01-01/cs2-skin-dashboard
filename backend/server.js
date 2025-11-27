@@ -29,11 +29,11 @@ app.use(passport.session());
 passport.serializeUser((user, done) => done(null, user));
 passport.deserializeUser((obj, done) => done(null, obj));
 
-// 强制使用公共测试 Key + 写死地址
+// 关键：profile: false 完全不需要 apiKey，只验证身份
 passport.use(new SteamStrategy({
   returnURL: BACKEND_URL + '/auth/steam/return',
   realm: BACKEND_URL + '/',
-  apiKey: 'A1B2C3D4E5F678901234567890123456'   // 公共 Key，绝对能用
+  profile: false  // ←←← 这行就是魔法！无需 apiKey
 }, (identifier, profile, done) => {
   process.nextTick(() => {
     const steamid = identifier.match(/\/id\/([^\/]+)/)?.[1] || identifier.split('/').pop();
