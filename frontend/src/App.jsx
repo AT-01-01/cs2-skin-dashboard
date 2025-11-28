@@ -33,7 +33,7 @@ function App() {
 
     try {
       // 1. 获取 Steam 库存（allorigins 2025年依然最稳）
-      const steamUrl = `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=english&count=5000`;
+      const steamUrl = `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=english`;
       const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`);
       if (!res.ok) throw new Error('无法连接 Steam');
 
