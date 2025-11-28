@@ -32,48 +32,54 @@ function App() {
   }, []);
 
   const loadInventory = async () => {
-    if (!apiKey || !user?.steamid) return;
-    setLoading(true);
-    try {
-      const res = await axios.get(
-        'https://api.steampowered.com/IEconItems_730/GetPlayerItems/v0001/',
-        { params: { key: apiKey, steamid: user.steamid } }
-      );
+  if (!user?.steamid) return;
+  setLoading(true);
 
-      const items = res.data.result?.items || [];
-      const validItems = items.filter((i) => i.market_hash_name).slice(0, 50);
+  try {
+    const res = await axios.get(
+      `https://steamcommunity.com/inventory/${user.steamid}/730/2`,
+      { params: { l: 'schinese', count: 5000 } }
+    );
 
-      const itemsWithPrice = await Promise.all(
-        validItems.map(async (item) => {
-          let buffPrice = '获取中...';
-          try {
-            const r = await fetch(
-              `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(
-                item.market_hash_name
-              )}`
-            );
-            const d = await r.json();
-            buffPrice = d.data?.items?.[0]?.price ? `¥${d.data.items[0].price}` : '暂无挂单';
-          } catch {
-            buffPrice = '网络错误';
-          }
+    const items = res.data?.descriptions || [];
 
-          return {
-            name: item.market_hash_name,
-            icon: `https://community.akamai.steamstatic.com/economy/image/${item.icon_url}/360fx360f`,
-            wear: item.paintwear ? (parseFloat(item.paintwear) * 100).toFixed(4) + '%' : '未知',
-            buffPrice,
-          };
-        })
-      );
+    const validItems = items
+      .filter(i => i.market_hash_name)
+      .slice(0, 50);
 
-      setInventory(itemsWithPrice);
-    } catch (err) {
-      alert('API Key 无效或库存设为私密，请检查后重试');
-    } finally {
-      setLoading(false);
-    }
-  };
+    const itemsWithPrice = await Promise.all(
+      validItems.map(async item => {
+        let buffPrice = '获取中...';
+
+        try {
+          const r = await fetch(
+            `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.market_hash_name)}`
+          );
+          const d = await r.json();
+          buffPrice = d.data?.items?.[0]?.price
+            ? `¥${d.data.items[0].price}`
+            : '暂无挂单';
+        } catch {
+          buffPrice = '网络错误';
+        }
+
+        return {
+          name: item.market_hash_name,
+          icon: `https://community.akamai.steamstatic.com/economy/image/${item.icon_url}/360fx360f`,
+          wear: item.float_value ? (item.float_value * 100).toFixed(4) + '%' : '未知',
+          buffPrice,
+        };
+      })
+    );
+
+    setInventory(itemsWithPrice);
+  } catch (err) {
+    alert('无法获取库存，请确认已公开库存（Steam → 隐私设置 → 物品公开）');
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const saveKeyAndLoad = () => {
     if (!apiKey.trim()) return alert('请输入 Steam Web API Key');
