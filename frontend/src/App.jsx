@@ -64,11 +64,31 @@ function App() {
           let buffPrice = '无挂单';
           let wear = '未知';
 
-          // 读取磨损
-          const floatLine = item.desc.descriptions?.find(d => 
-            d.value?.includes('Float') || /^0\.\d{4,}/.test(d.value)
-          );
-          if (floatLine) wear = floatLine.value.trim();
+          // 优先方式1：2025 年 CS2 官方新字段（最精准）
+          const wearProp = asset.asset_properties?.find(p => p.propertyid === 2);
+          if (wearProp?.float_value !== undefined) {
+            const fv = parseFloat(wearProp.float_value);
+            if (!isNaN(fv)) {
+              wear = fv.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
+              // 可选：加磨损等级
+              if (fv <= 0.07) wear += ' (工厂新)';
+              else if (fv <= 0.15) wear += ' (略有磨损)';
+              else if (fv <= 0.38) wear += ' (久经沙场)';
+              else if (fv <= 0.45) wear += ' (破损不堪)';
+              else wear += ' (战痕累累)';
+            }
+          }
+
+          // 备用方式2：老版本 descriptions 里找（兼容极少数旧物品）
+          if (wear === '未知') {
+            const oldLine = item.desc.descriptions?.find(d => 
+              d.value?.includes('Float Value:') || /^0\.\d{4,}/.test(d.value?.trim())
+            );
+            if (oldLine) {
+              const match = oldLine.value.match(/0\.\d+/);
+              if (match) wear = match[0];
+            }
+          }
 
           try {
             const buffUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&goods_id=${item.desc.classid}`;
