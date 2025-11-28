@@ -1,68 +1,71 @@
-// backend/server.js
 const express = require('express');
-const axios = require('axios');
-const helmet = require('helmet');
+const passport = require('passport');
+const SteamStrategy = require('passport-steam').Strategy;
+const session = require('express-session');
 const cors = require('cors');
-require('dotenv').config();
 
 const app = express();
-app.use(helmet());
-app.use(express.json());
+
+// 全部写死，永不依赖环境变量
+const BACKEND_URL  = 'https://cs2-skin-dashboard.onrender.com';
+const FRONTEND_URL = 'https://cs2-skin-dashboard.vercel.app';   // ←←←←← 如果你用的是新部署的地址，改成那个！！！
+
 app.use(cors({
-  origin: process.env.FRONTEND_ORIGIN || '*',
+  origin: "https://cs2-skin-dashboard.vercel.app",
   credentials: true
 }));
+app.use(express.json());
+app.use(session({
+  secret: 'cs2dashboard2025',
+  resave: false,
+  saveUninitialized: false,
+  proxy: true,
+  cookie: { secure: true, sameSite: 'none', httpOnly: true }
+}));
+app.set('trust proxy', 1);   // ←←← 加上这行！超级关键！
+app.use(passport.initialize());
+app.use(passport.session());
 
-const STEAM_BASE = 'https://api.steampowered.com/IEconItems_730/GetPlayerItems/v0001/';
+passport.serializeUser((user, done) => done(null, user));
+passport.deserializeUser((obj, done) => done(null, obj));
 
-/**
- * POST /api/inventory
- * body: { steamid: string, key?: string }
- *
- * If key is provided in body, use it for this request only (not saved).
- * Else if process.env.STEAM_API_KEY is set, use that.
- */
-app.post('/api/inventory', async (req, res) => {
-  try {
-    const { steamid, key } = req.body || {};
-    if (!steamid) return res.status(400).json({ error: 'missing steamid' });
+// 关键：profile: false 完全不需要 apiKey，只验证身份
+passport.use(new SteamStrategy({
+  returnURL: BACKEND_URL + '/auth/steam/return',
+  realm: BACKEND_URL + '/',
+  profile: false  // ←←← 这行就是魔法！无需 apiKey
+}, (identifier, profile, done) => {
+  process.nextTick(() => {
+    const steamid = identifier.match(/\/id\/([^\/]+)/)?.[1] || identifier.split('/').pop();
+    return done(null, { steamid });
+  });
+}));
 
-    const apiKey = key || process.env.STEAM_API_KEY;
-    if (!apiKey) return res.status(400).json({ error: 'no api key provided; set STEAM_API_KEY in server env or pass key in body' });
+app.get('/auth/steam', passport.authenticate('steam'));
 
-    const params = {
-      key: apiKey,
-      steamid: steamid,
-    };
-
-    const resp = await axios.get(STEAM_BASE, { params, timeout: 15000 });
-    const items = resp.data?.result?.items || [];
-
-    // Map / normalize minimal fields for frontend
-    const normalized = items.map(item => {
-      const icon = item.icon_url ? `https://community.akamai.steamstatic.com/economy/image/${item.icon_url}/360fx360f` : null;
-      return {
-        id: item.id || `${item.defindex || 'unk'}_${Math.random().toString(36).slice(2,8)}`,
-        name: item.market_hash_name || item.name || item.market_name || '未知名称',
-        icon_url: icon,
-        paintwear: typeof item.paintwear === 'number' ? item.paintwear : (item.paintwear ? parseFloat(item.paintwear) : null),
-        floatvalue: item.floatvalue || null,
-        defindex: item.defindex || null,
-        // keep raw for debugging if needed
-        raw: item
-      };
-    });
-
-    return res.json({ items: normalized });
-  } catch (err) {
-    console.error('proxy error', err?.message || err);
-    // provide helpful error message to frontend
-    const msg = err.response?.data || err.message || 'unknown error';
-    return res.status(500).json({ error: 'failed to fetch inventory', detail: msg });
+// 关键回调，加入双重保险
+app.get('/auth/steam/return',
+  passport.authenticate('steam', { failureRedirect: FRONTEND_URL }),
+  (req, res) => {
+    try {
+      res.redirect(FRONTEND_URL + '/?loggedIn=true');
+    } catch (e) {
+      res.redirect(FRONTEND_URL + '/?loggedIn=true');
+    }
   }
+);
+
+app.get('/api/me', (req, res) => {
+  if (!req.user) return res.status(401).json({error: '未登录'});
+  res.json({ steamid: req.user.steamid, message: '登录成功！库存加载中…' });
 });
 
-const port = process.env.PORT || 8080;
-app.listen(port, () => {
-  console.log(`Inventory proxy running on ${port}`);
+app.get('/api/logout', (req, res) => {
+  req.logout(() => {});
+  res.redirect(FRONTEND_URL);
 });
+
+app.get('/', (req, res) => res.send('CS2 Skin Dashboard 后端运行正常'));
+
+const PORT = process.env.PORT || 3001;
+app.listen(PORT, () => console.log('后端启动成功'));
