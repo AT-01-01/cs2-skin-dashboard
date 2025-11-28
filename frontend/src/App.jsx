@@ -10,11 +10,12 @@ function App() {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 检查登录 + 加载库存
   useEffect(() => {
-    axios.get(`${BACKEND}/api/me`, { withCredentials: true })
+    axios
+      .get(`${BACKEND}/api/me`, { withCredentials: true })
       .then(res => {
-        setUser(res.data))
+        setUser(res.data);           // 这里一定要加分号！
+      })
       .catch(() => {});
 
     if (window.location.search.includes('loggedIn=true')) {
@@ -22,7 +23,7 @@ function App() {
     }
   }, []);
 
-  // 用户保存 Key 后加载库存
+  // 加载库存函数保持不变（你原来的已经很好了）
   const loadInventory = async () => {
     if (!apiKey || !user?.steamid) return;
     setLoading(true);
@@ -31,13 +32,11 @@ function App() {
         `https://api.steampowered.com/IEconItems_730/GetPlayerItems/v0001/`,
         { params: { key: apiKey, steamid: user.steamid } }
       );
-
       const items = res.data.result?.items || [];
       const validItems = items
         .filter(item => item.market_hash_name)
-        .slice(0, 50); // 取前50件防止卡死
+        .slice(0, 50);
 
-      // 获取 Buff 价格（简单版：只取名字匹配最低价）
       const itemsWithPrice = await Promise.all(
         validItems.map(async (item) => {
           let buffPrice = '获取中...';
@@ -58,7 +57,6 @@ function App() {
           };
         })
       );
-
       setInventory(itemsWithPrice);
     } catch (err) {
       alert('API Key 无效或库存设为私密，请检查后重试');
@@ -91,20 +89,23 @@ function App() {
       {/* 未登录 */}
       {!user ? (
         <div style={{ textAlign: 'center', paddingTop: '200px' }}>
-          <h1 style={{ fontSize: '48px', color: '#66c0f4' }}>CS2 皮肤仪表盘h1>
-          <button onClick={login} style={{
-            marginTop: '50px',
-            padding: '20px 80px',
-            fontSize: '28px',
-            background: '#1b2838',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            cursor: 'pointer'
-          }}>
+          <h1 style={{ fontSize: '48px', color: '#66c0f4' }}>CS2 皮肤仪表盘</h1>
+          <button
+            onClick={login}
+            style={{
+              marginTop: '50px',
+              padding: '20px 80px',
+              fontSize: '28px',
+              background: '#1b2838',
+              color: 'white',
+              border: 'none',
+              borderRadius: '12px',
+              cursor: 'pointer'
+            }}
+          >
             Steam 登录
-          button>
-        div>
+          </button>
+        </div>
       ) : (
         <div style={{ padding: '20px' }}>
           {/* 输入 API Key 弹窗 */}
@@ -119,80 +120,100 @@ function App() {
                 style={{ width: '100%', padding: '14px', fontSize: '18px', margin: '15px 0', borderRadius: '8px', border: 'none' }}
               />
               <br />
-              <button onClick={saveKeyAndLoad} style={{
-                padding: '14px 40px',
-                background: '#66c0f4',
-                border: 'none',
-                borderRadius: '8px',
-                fontSize: '18px',
-                cursor: 'pointer'
-              }}>
+              <button
+                onClick={saveKeyAndLoad}
+                style={{
+                  padding: '14px 40px',
+                  background: '#66c0f4',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '18px',
+                  cursor: 'pointer',
+                  margin: '10px'
+                }}
+              >
                 加载我的库存
-              button>
+              </button>
               <p style={{ marginTop: '15px', fontSize: '14px', color: '#888' }}>
                 <a href="https://steamcommunity.com/dev/apikey" target="_blank" rel="noreferrer" style={{ color: '#66c0f4' }}>
                   点此免费申请 Key（30秒）
-                a>
-              p>
-            div>
+                </a>
+              </p>
+            </div>
           )}
 
           {/* 加载中 */}
           {loading && <div style={{ textAlign: 'center', padding: '100px', fontSize: '24px' }}>正在加载你的库存，请稍等...</div>}
 
-          {/* 库存网格：一行5个 */}
+          {/* 库存展示 */}
           {inventory.length > 0 && (
             <div>
               <h2 style={{ textAlign: 'center', color: '#ff79c6', margin: '40px 0' }}>
                 你的 CS2 库存（实时 Buff 参考价）
-              h2>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-                gap: '20px',
-                padding: '0 20px',
-                maxWidth: '1400px',
-                margin: '0 auto'
-              }}>
+              </h2>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+                  gap: '20px',
+                  padding: '0 20px',
+                  maxWidth: '1400px',
+                  margin: '0 auto'
+                }}
+              >
                 {inventory.map((item, i) => (
-                  <div key={i} style={{
-                    background: 'linear-gradient(135deg, #1e2a38, #16202a)',
-                    borderRadius: '16px',
-                    padding: '16px',
-                    textAlign: 'center',
-                    boxShadow: '0 8px 20px rgba(0,0,0,0.6)',
-                    transition: 'transform 0.3s',
-                  }} onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-8px)'}
-                     onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}>
+                  <div
+                    key={i}
+                    style={{
+                      background: 'linear-gradient(135deg, #1e2a38, #16202a)',
+                      borderRadius: '16px',
+                      padding: '16px',
+                      textAlign: 'center',
+                      boxShadow: '0 8px 20px rgba(0,0,0,0.6)',
+                      transition: 'transform 0.3s'
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-8px)'}
+                    onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+                  >
                     <img src={item.icon} alt={item.name} style={{ width: '100%', borderRadius: '12px', marginBottom: '12px' }} />
-                    <h4 style={{ margin: '8px 0', fontSize: '15px', color: '#fff', height: '48px', overflow: 'ellipsis', overflow: 'hidden' }}>
+                    <h4 style={{ margin: '8px 0', fontSize: '15px', color: '#fff', height: '48px', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                       {item.name}
-                    h4>
-                    <p style={{ color: '#8be9fd', fontSize: '14px' }}>磨损: {item.wear}p>
+                    </h4>
+                    <p style={{ color: '#8be9fd', fontSize: '14px' }}>磨损: {item.wear}</p>
                     <p style={{ color: '#ff6b6b', fontSize: '18px', fontWeight: 'bold', marginTop: '10px' }}>
                       {item.buffPrice}
-                    p>
-                  div>
+                    </p>
+                  </div>
                 ))}
-              div>
-            div>
+              </div>
+            </div>
           )}
 
-          {/* 已加载但为空（Key填了但没库存） */}
+          {/* 没库存时的提示 */}
           {inventory.length === 0 && !loading && !showKeyInput && (
             <div style={{ textAlign: 'center', padding: '100px', color: '#888' }}>
               暂无 CS2 物品或库存隐私设置，请在 Steam 设置中公开库存
-            div>
+            </div>
           )}
 
-          <div style={{ textAlign: 'center', marginTop: '80px' }}>
-            <button onClick={logout} style={{ padding: '12px 30px', background: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}>
+          {/* 退出登录 + 重新输入Key */}
+          <div style={{ textAlign: 'center', marginTop: '80px', display: 'flex', gap: '20px', justifyContent: 'center' }}>
+            <button
+              onClick={() => setShowKeyInput(true)}
+              style={{ padding: '12px 30px', background: '#66c0f4', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+            >
+              重新输入 API Key
+            </button>
+            <button
+              onClick={logout}
+              style={{ padding: '12px 30px', background: '#e74c3c', border: 'none', borderRadius: '8px', cursor: 'pointer' }}
+            >
               退出登录
-            button>
-          div>
-        div>
+            </button>
+          </div>
+        </div>
       )}
-    div>
+    </div>
   );
 }
 
