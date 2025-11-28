@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 
-const BACKEND = 'https://cs2-skin-dashboard.onrender.com';
+// 支持环境变量，Vite使用VITE_前缀
+const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://cs2-skin-dashboard.onrender.com';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -111,7 +112,7 @@ function App() {
       ) : (
         <div style={{ padding: '20px' }}>
           {/* API Key 输入框 */}
-          {showKeyInput && inventory.length === 0 && (
+          {(showKeyInput || (inventory.length === 0 && !loading && !apiKey)) && (
             <div style={{ textAlign: 'center', margin: '40px auto', maxWidth: '600px', padding: '30px', background: '#16232f', borderRadius: '16px' }}>
               <p style={{ fontSize: '20px' }}>首次使用需绑定你的 Steam Web API Key（免费申请）</p>
               <input
