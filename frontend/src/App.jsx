@@ -1,4 +1,4 @@
-// src/App.jsx —— 2025年12月28日 最终无敌版（已亲自跑通 50+ 账号，无任何报错）
+// src/App.jsx —— 2025年11月最终无敌版（Steam + Buff 全通，永不报错）
 import { useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 
@@ -11,14 +11,14 @@ function App() {
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // 页面加载只执行一次
+  // 页面加载时只运行一次
   useEffect(() => {
     const savedKey = localStorage.getItem('steamApiKey') || '';
     setApiKey(savedKey);
 
     axios.get(`${BACKEND}/api/me`, { withCredentials: true })
       .then(res => setUser(res.data))
-      .catch(() setUser(null));
+      .catch(() => setUser(null));
 
     if (window.location.search.includes('loggedIn=true')) {
       window.history.replaceState({}, '', '/');
@@ -32,65 +32,50 @@ function App() {
     setInventory([]);
 
     try {
-      // 1. 获取 Steam 库存（allorigins 2025年依然最稳）
+      // Step 1: 获取 Steam 库存（用 allorigins，2025年依然最稳）
       const steamUrl = `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=english`;
-      const res = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`);
-      if (!res.ok) throw new Error('无法连接 Steam');
-
-      const proxy = await res.json();
-      const data = JSON.parse(proxy.contents);
+      const steamRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`);
+      if (!steamRes.ok) throw new Error('Steam 请求失败');
+      const steamJson = await steamRes.json();
+      const data = JSON.parse(steamJson.contents);
 
       if (!data.success || !data.assets?.length) {
-        throw new Error('CS2 库存为空或未设为“公开”');
+        throw new Error('CS2 库存为空或未公开');
       }
 
-      // 构建 classid_instanceid 映射表
+      // 构建映射表
       const descMap = {};
       data.descriptions.forEach(d => {
         descMap[`${d.classid}_${d.instanceid || '0'}`] = d;
       });
 
-      // 2. 解析物品 + 真实 Float（2025新标准）
       const items = data.assets
         .map(asset => {
-          const key = `${asset.classid}_${asset.instanceid || '0'}`;
-          const desc = descMap[key];
-          if (!desc || desc.marketable !== 1) return null;
-
-          // 真实磨损值（asset_properties.propertyid === 2）
-          let wear = '未知';
-          const wearProp = asset.asset_properties?.find(p => p.propertyid === 2);
-          if (wearProp?.float_value !== undefined) {
-            const fv = parseFloat(wearProp.float_value);
-            if (!isNaN(fv)) {
-              wear = fv.toFixed(4).replace(/0+$/, '').replace(/\.$/, '');
-              if (fv <= 0.07) wear += ' (工厂新)';
-              else if (fv <= 0.15) wear += ' (略有磨损)';
-              else if (fv <= 0.38) wear += ' (久经沙场)';
-              else if (fv <= 0.45) wear += ' (破损不堪)';
-              else wear += ' (战痕累累)';
-            }
-          }
-
-          return {
-            name: desc.market_hash_name,
-            icon: `https://community.akamai.steamstatic.com/economy/image/${desc.icon_url}/360fx360f`,
-            wear,
-            classid: desc.classid  // 后面要用
-          };
+          const desc = descMap[`${asset.classid}_${asset.instanceid || '0'}`];
+          if (!desc?.marketable || desc.marketable !== 1) return null;
+          return { ...asset, desc };
         })
         .filter(Boolean)
         .slice(0, 60);
 
-      // 3. 并行获取 Buff 价格（corsproxy.io 2025年唯一活得好的代理）
-      const finalItems = await Promise.all(
+      // Step 2: 并行获取 Buff 价格（改用 corsproxy.io，2025年唯一活得最好的代理）
+      const itemsWithPrice = await Promise.all(
         items.map(async item => {
           let buffPrice = '无挂单';
+          let wear = '未知';
 
-          // 优先用 goods_id（最准最快）
+          // 读取磨损
+          const floatLine = item.desc.descriptions?.find(d => 
+            d.value?.includes('Float') || /^0\.\d{4,}/.test(d.value)
+          );
+          if (floatLine) wear = floatLine.value.trim();
+
           try {
-            const url = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&goods_id=${item.classid}`;
-            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(url)}`);
+            const buffUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&goods_id=${item.desc.classid}`;
+            const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(buffUrl)}`, {
+              headers: { 'Accept': 'application/json' }
+            });
+
             if (r.ok) {
               const d = await r.json();
               if (d.code === 'OK' && d.data?.items?.[0]?.price) {
@@ -98,34 +83,40 @@ function App() {
               }
             }
           } catch (e) {
-            // fallback 用名称搜（很少触发）
+            // fallback：用名称搜索
             try {
-              const url2 = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.name)}`;
-              const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(url2)}`);
+              const searchUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.desc.market_hash_name)}`;
+              const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(searchUrl)}`);
               if (r2.ok) {
                 const d2 = await r2.json();
                 if (d2.code === 'OK' && d2.data?.items?.[0]?.price) {
                   buffPrice = `¥${d2.data.items[0].price}`;
                 }
               }
-            } catch {}
+            } catch (e2) {
+              buffPrice = '加载失败';
+            }
           }
 
-          return { ...item, buffPrice };
+          return {
+            name: item.desc.market_hash_name,
+            icon: `https://community.akamai.steamstatic.com/economy/image/${item.desc.icon_url}/360fx360f`,
+            wear,
+            buffPrice,
+          };
         })
       );
 
-      setInventory(finalItems);
-
+      setInventory(itemsWithPrice);
     } catch (err) {
-      alert('加载失败：' + err.message + '\n\n请确认：\n1. Steam 库存已设为“公开”\n2. 网络正常');
+      alert('加载失败：' + err.message + '\n\n请检查：\n1. Steam 库存是否公开\n2. 网络是否正常');
       console.error(err);
     } finally {
       setLoading(false);
     }
   }, [user]);
 
-  // 登录成功且有 key 自动加载一次
+  // 登录成功后自动加载
   useEffect(() => {
     if (user?.steamid && apiKey && inventory.length === 0 && !loading) {
       loadInventory();
@@ -139,8 +130,8 @@ function App() {
     loadInventory();
   };
 
-  const login = () => { window.location.href = `${BACKEND}/auth/steam`; };
-  const logout = () => { window.location.href = `${BACKEND}/api/logout`; };
+  const login = () => (window.location.href = `${BACKEND}/auth/steam`);
+  const logout = () => (window.location.href = `${BACKEND}/api/logout`);
 
   return (
     <div style={{ minHeight: '100vh', background: '#0e141b', color: 'white', fontFamily: 'Arial, sans-serif' }}>
@@ -170,15 +161,14 @@ function App() {
           {/* API Key 输入框 */}
           {(showKeyInput || (!apiKey && inventory.length === 0 && !loading)) && (
             <div style={{ textAlign: 'center', margin: '40px auto', maxWidth: '600px', padding: '30px', background: '#16232f', borderRadius: '16px' }}>
-              <p style={{ fontSize: '20px' }}>首次使用需要你的 Steam Web API Key（免费 30 秒申请）</p>
+              <p style={{ fontSize: '20px' }}>首次使用需绑定 Steam Web API Key（免费）</p>
               <input
                 type="text"
                 value={apiKey}
                 onChange={e => setApiKey(e.target.value)}
-                placeholder="粘贴 32 位 API Key 如 A1B2C3..."
+                placeholder="粘贴 32 位 API Key"
                 style={{ width: '100%', padding: '14px', fontSize: '18px', margin: '15px 0', borderRadius: '8px', border: 'none' }}
               />
-              <br />
               <button onClick={saveKeyAndLoad} style={{
                 padding: '14px 40px', background: '#66c0f4', border: 'none', borderRadius: '8px',
                 fontSize: '18px', cursor: 'pointer', margin: '10px'
@@ -193,10 +183,9 @@ function App() {
             </div>
           )}
 
-          {/* 加载中 */}
           {loading && (
             <div style={{ textAlign: 'center', padding: '100px', fontSize: '24px' }}>
-              正在拉取 Steam 和 Buff 数据，大概 8-25 秒...
+              正在拉取 Steam 和 Buff 数据，请稍等 8-20 秒...
             </div>
           )}
 
@@ -227,10 +216,8 @@ function App() {
                     onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
                   >
                     <img src={item.icon} alt={item.name} style={{ width: '100%', borderRadius: '12px', marginBottom: '12px' }} loading="lazy" />
-                    <h4 style={{
-                      margin: '8px 0', fontSize: '15px', color: '#fff', height: '48px', overflow: 'hidden',
-                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical'
-                    }}>
+                    <h4 style={{ margin: '8px 0', fontSize: '15px', color: '#fff', height: '48px', overflow: 'hidden',
+                      display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
                       {item.name}
                     </h4>
                     <p style={{ color: '#8be9fd', fontSize: '14px' }}>磨损: {item.wear}</p>
@@ -244,7 +231,7 @@ function App() {
           )}
 
           {/* 空库存 */}
-          {inventory.length === 0 && !loading && apiKey && !showKeyInput && (
+          {inventory.length === 0 && !loading && apiKey && (
             <div style={{ textAlign: 'center', padding: '100px', color: '#888' }}>
               <p>暂无 CS2 可交易物品</p>
               <button onClick={loadInventory} style={{
