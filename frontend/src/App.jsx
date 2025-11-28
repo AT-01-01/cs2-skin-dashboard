@@ -29,7 +29,10 @@ function App() {
     if (typeof window !== 'undefined' && window.location.search.includes('loggedIn=true')) {
       window.history.replaceState({}, '', '/');
     }
-  }, []);
+    if (user?.steamid) {
+      loadInventory(); // 登录成功立刻自动加载库存
+    }
+  }, [user]);
 
   const loadInventory = async () => {
   if (!user?.steamid) return;
