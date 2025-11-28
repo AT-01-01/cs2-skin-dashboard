@@ -35,56 +35,62 @@ function App() {
   if (!user?.steamid) return;
   setLoading(true);
   try {
-    // 🔥 用公共 API，一键拿名字+图标+磨损
     const res = await fetch(
-      `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=zh-CN`
+      `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=english&count=5000`
     );
     const data = await res.json();
 
-    if (!data.rgInventory || data.rgInventory.length === 0) {
-      throw new Error('库存为空或设为私密');
+    if (!data?.success || !data?.assets || data.assets.length === 0) {
+      throw new Error('库存为空或未公开');
     }
 
-    // 匹配描述，构建物品列表（取前50个）
-    const inventoryMap = new Map();
-    Object.entries(data.rgDescriptions || {}).forEach(([key, desc]) => {
-      if (desc.market_hash_name && desc.marketable === 1) {  // 只取可市场物品
-        inventoryMap.set(key, desc);
-      }
+    // 构建描述映射
+    const descriptions = {};
+    data.descriptions.forEach(d => {
+      const key = `${d.classid}_${d.instanceid || '0'}`;
+      descriptions[key] = d;
     });
 
-    const items = data.rgInventory
-      .map(inv => {
-        const desc = inventoryMap.get(`${inv.classid}_${inv.instanceid}`);
-        return desc ? { ...desc, ...inv } : null;
+    const items = data.assets
+      .map(asset => {
+        const desc = descriptions[`${asset.classid}_${asset.instanceid || '0'}`];
+        if (!desc || !desc.market_hash_name || !desc.marketable) return null;
+        return { ...asset, ...desc };
       })
       .filter(Boolean)
       .slice(0, 50);
 
-    // 加 Buff 价格（你原来的逻辑）
+    // 加 Buff 价格
     const itemsWithPrice = await Promise.all(
       items.map(async (item) => {
-        let buffPrice = '暂无挂单';
+        let buffPrice = '加载中...';
         try {
-          const searchRes = await fetch(
+          const r = await fetch(
             `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.market_hash_name)}`
           );
-          const buffData = await searchRes.json();
-          buffPrice = buffData.data?.items?.[0]?.price ? `¥${buffData.data.items[0].price}` : '暂无挂单';
-        } catch {}
+          const d = await r.json();
+          buffPrice = d.data?.items?.[0]?.price ? `¥${d.data.items[0].price}` : '暂无挂单';
+        } catch (e) {
+          buffPrice = '网络错误';
+        }
+
         return {
-          name: item.market_name || item.name,
-          icon: item.icon_url_large || item.icon_url || `https://community.akamai.steamstatic.com/economy/image/${item.icon_url_last}/`,
-          wear: '需额外 API',  // 公共 API 无精确磨损，想加用 GetPlayerItems 合并
-          buffPrice
+          name: item.market_hash_name,
+          icon: `https://community.akamai.steamstatic.com/economy/image/${item.icon_url}/360fx360f`,
+          // 公共接口没有精确磨损，留空或写“未知”
+          wear: '未知',
+          buffPrice,
         };
       })
     );
-    setInventory(itemsWithPrice);
+
+    setInventory(itemsWithPrice); // ← 这一步必须执行！
   } catch (err) {
-    alert('库存设为私密或网络错误，请公开库存重试');
+    console.error(err);
+    alert('无法加载库存，请确认 Steam 库存已设为“公开”');
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
 
 
