@@ -8,19 +8,25 @@ const BACKEND = import.meta.env.VITE_BACKEND_URL || 'https://cs2-skin-dashboard.
 function App() {
   const [user, setUser] = useState(null);
   const [inventory, setInventory] = useState([]);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('steamApiKey') || '');
+  const [apiKey, setApiKey] = useState(''); // 改为空字符串，在 useEffect 中初始化
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // 在客户端环境中初始化 apiKey
+    if (typeof window !== 'undefined') {
+      const savedKey = localStorage.getItem('steamApiKey') || '';
+      setApiKey(savedKey);
+    }
+
     axios
       .get(`${BACKEND}/api/me`, { withCredentials: true })
       .then((res) => {
-        setUser(res.data); // 必须加分号！
+        setUser(res.data);
       })
       .catch(() => {});
 
-    if (window.location.search.includes('loggedIn=true')) {
+    if (typeof window !== 'undefined' && window.location.search.includes('loggedIn=true')) {
       window.history.replaceState({}, '', '/');
     }
   }, []);
