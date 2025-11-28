@@ -34,7 +34,8 @@ function App() {
     try {
       // 使用 allorigins 彻底解决 Steam CORS 问题
       const steamUrl = `https://steamcommunity.com/inventory/${user.steamid}/730/2?l=english`;
-      const proxyRes = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(steamUrl)}`);
+      // 用 corsproxy.io 替代 allorigins，2025年最新最稳方案
+      const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(buffUrl)}`);
 
       if (!proxyRes.ok) throw new Error('代理请求失败');
 
@@ -80,28 +81,30 @@ function App() {
           );
           if (floatDesc) wear = floatDesc.value.replace('Float Value: ', '').trim();
 
+          // Buff 价格获取（2025年最新可用方案）
           try {
-            const buffUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&goods_id=${item.desc.classid}`;
-            const r = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(buffUrl)}`);
+              const buffUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&goods_id=${item.desc.classid}`;
+              const r = await fetch(`https://corsproxy.io/?${encodeURIComponent(buffUrl)}`);
+  
             if (r.ok) {
               const json = await r.json();
-              const d = JSON.parse(json.contents);
-              if (d.code === 'OK' && d.data?.items?.[0]?.price) {
-                buffPrice = `¥${d.data.items[0].price}`;
+              if (json.code === 'OK' && json.data?.items?.[0]?.price) {
+                buffPrice = `¥${json.data.items[0].price}`;
               } else {
                 buffPrice = '无挂单';
               }
+            } else {
+              throw new Error('500');
             }
-          } catch (err) {
-            // 失败 fallback 用名称搜索（极少触发）
+          } catch {
+          // fallback 用名称搜
             try {
               const searchUrl = `https://buff.163.com/api/market/goods/sell_order?game=csgo&page_num=1&search=${encodeURIComponent(item.desc.market_hash_name)}`;
-              const r2 = await fetch(`https://api.allorigins.win/get?url=${encodeURIComponent(searchUrl)}`);
+              const r2 = await fetch(`https://corsproxy.io/?${encodeURIComponent(searchUrl)}`);
               if (r2.ok) {
                 const json2 = await r2.json();
-                const d2 = JSON.parse(json2.contents);
-                if (d2.code === 'OK' && d2.data?.items?.[0]?.price) {
-                  buffPrice = `¥${d2.data.items[0].price}`;
+                if (json2.code === 'OK' && json2.data?.items?.[0]?.price) {
+                  buffPrice = `¥${json2.data.items[0].price}`;
                 } else {
                   buffPrice = '无挂单';
                 }
